@@ -1,13 +1,24 @@
 import pandas as pd
 import numpy as np
-from strategy import moving_average_strategy
-from json_logger import save_model_results
-import optuna
-import os
-
 
 def run_backtest(data: pd.DataFrame, initial_capital: float, commission: float, stop_loss_multiplier: float = 1.5,
                  take_profit_multiplier: float = 3.0):
+    """
+    Выполняет бэктест на основе сигналов в данных.
+
+    :param data: DataFrame с колонками 'signal', 'open', 'close', 'atr'.
+    :param initial_capital: Начальный капитал.
+    :param commission: Комиссия за сделку.
+    :param stop_loss_multiplier: Множитель ATR для стоп-лосса.
+    :param take_profit_multiplier: Множитель ATR для тейк-профита.
+    :return: Кортеж (backtest_data, orders, metrics, num_orders).
+    """
+    # Проверка наличия необходимых колонок
+    required_columns = ['signal', 'open', 'close', 'atr']
+    for col in required_columns:
+        if col not in data.columns:
+            raise ValueError(f"Отсутствует обязательная колонка: {col}")
+
     capital = initial_capital
     assets = 0
     entry_price = 0
@@ -49,7 +60,15 @@ def run_backtest(data: pd.DataFrame, initial_capital: float, commission: float, 
 
         data.loc[data.index[i + 1], 'portfolio_value'] = capital + assets * data['close'].iloc[i + 1]
 
-    final_value = capital + assets * data['close'].iloc[-1] if assets > 0 else capital
+    # Принудительное закрытие позиции в конце бэктеста
+    if assets > 0:
+        last_price = data['close'].iloc[-1]
+        capital = assets * last_price * (1 - commission)
+        orders.append({"action": "sell", "amount": assets, "price": last_price, "timestamp": data.index[-1].isoformat(),
+                       "reason": "end_of_backtest"})
+        assets = 0
+
+    final_value = capital
     equity_series = data['portfolio_value'].dropna()
     if len(equity_series) > 1:
         returns = equity_series.pct_change().dropna()
@@ -67,102 +86,5 @@ def run_backtest(data: pd.DataFrame, initial_capital: float, commission: float, 
         "max_drawdown_percent": max_drawdown,
         "sharpe_ratio": sharpe_ratio
     }
-    return data, orders, metrics
-
-
-def objective(trial, data_fetcher, symbol, timeframe, initial_capital, commission):
-    # Оптимизируемые параметры
-    short_period = trial.suggest_int("short_period", 5, 50)
-    long_period = trial.suggest_int("long_period", 20, 200)
-    limit = trial.suggest_categorical("limit", [200, 500, 1000])  # Увеличен минимальный лимит до 200
-    rsi_period = trial.suggest_int("rsi_period", 10, 20)
-    atr_period = trial.suggest_int("atr_period", 10, 20)
-    buy_rsi_threshold = trial.suggest_float("buy_rsi_threshold", 10, 60)  # Расширен диапазон
-    sell_rsi_threshold = trial.suggest_float("sell_rsi_threshold", 40, 90)  # Расширен диапазон
-    stop_loss_multiplier = trial.suggest_float("stop_loss_multiplier", 1.0, 3.0)
-    take_profit_multiplier = trial.suggest_float("take_profit_multiplier", 2.0, 5.0)
-    ema_short_period = trial.suggest_int("ema_short_period", 20, 100)
-    ema_long_period = trial.suggest_int("ema_long_period", 100, 300)
-    use_trend_filter = trial.suggest_categorical("use_trend_filter", [True, False])
-    use_rsi_filter = trial.suggest_categorical("use_rsi_filter", [True, False])
-
-    try:
-        data = data_fetcher.fetch_ohlcv(symbol, timeframe, limit)
-        strategy_data = moving_average_strategy(data.copy(), short_period, long_period, rsi_period,
-                                                atr_period=atr_period,
-                                                buy_rsi_threshold=buy_rsi_threshold,
-                                                sell_rsi_threshold=sell_rsi_threshold,
-                                                ema_short_period=ema_short_period, ema_long_period=ema_long_period,
-                                                use_trend_filter=use_trend_filter, use_rsi_filter=use_rsi_filter,
-                                                debug=False)
-        _, orders, metrics = run_backtest(strategy_data, initial_capital, commission, stop_loss_multiplier,
-                                          take_profit_multiplier)
-
-        model_params = {
-            "short_period": short_period,
-            "long_period": long_period,
-            "limit": limit,
-            "rsi_period": rsi_period,
-            "atr_period": atr_period,
-            "buy_rsi_threshold": buy_rsi_threshold,
-            "sell_rsi_threshold": sell_rsi_threshold,
-            "stop_loss_multiplier": stop_loss_multiplier,
-            "take_profit_multiplier": take_profit_multiplier,
-            "ema_short_period": ema_short_period,
-            "ema_long_period": ema_long_period,
-            "use_trend_filter": use_trend_filter,
-            "use_rsi_filter": use_rsi_filter
-        }
-        save_model_results(model_params, metrics["final_value"], orders, symbol, initial_capital)
-
-        return metrics["sharpe_ratio"]
-    except Exception as e:
-        print(f"Ошибка в trial для {symbol}: {e}")
-        return -float('inf')
-
-
-def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commission, n_trials=100):
-    study = optuna.create_study(direction="maximize")
-    study.optimize(lambda trial: objective(trial, data_fetcher, symbol, timeframe, initial_capital, commission),
-                   n_trials=n_trials)
-
-    trials_folder = "trials"
-    if not os.path.exists(trials_folder):
-        os.makedirs(trials_folder)
-
-    trials_df = pd.DataFrame([{
-        "trial_number": trial.number,
-        "short_period": trial.params["short_period"],
-        "long_period": trial.params["long_period"],
-        "limit": trial.params["limit"],
-        "rsi_period": trial.params["rsi_period"],
-        "atr_period": trial.params["atr_period"],
-        "buy_rsi_threshold": trial.params["buy_rsi_threshold"],
-        "sell_rsi_threshold": trial.params["sell_rsi_threshold"],
-        "stop_loss_multiplier": trial.params["stop_loss_multiplier"],
-        "take_profit_multiplier": trial.params["take_profit_multiplier"],
-        "ema_short_period": trial.params["ema_short_period"],
-        "ema_long_period": trial.params["ema_long_period"],
-        "use_trend_filter": trial.params["use_trend_filter"],
-        "use_rsi_filter": trial.params["use_rsi_filter"],
-        "sharpe_ratio": trial.value
-    } for trial in study.trials])
-    trials_df.to_csv(f"{trials_folder}/optuna_trials_{symbol.replace('/', '_')}.csv", index=False)
-
-    best_params = study.best_params
-    print(f"Лучшие параметры для {symbol}: {best_params}, Sharpe Ratio: {study.best_value:.2f}")
-
-    data = data_fetcher.fetch_ohlcv(symbol, timeframe, best_params["limit"])
-    strategy_data = moving_average_strategy(data.copy(), best_params["short_period"], best_params["long_period"],
-                                            best_params["rsi_period"], atr_period=best_params["atr_period"],
-                                            buy_rsi_threshold=best_params["buy_rsi_threshold"],
-                                            sell_rsi_threshold=best_params["sell_rsi_threshold"],
-                                            ema_short_period=best_params["ema_short_period"],
-                                            ema_long_period=best_params["ema_long_period"],
-                                            use_trend_filter=best_params["use_trend_filter"],
-                                            use_rsi_filter=best_params["use_rsi_filter"], debug=False)
-    backtest_data, orders, metrics = run_backtest(strategy_data, initial_capital, commission,
-                                                  best_params["stop_loss_multiplier"],
-                                                  best_params["take_profit_multiplier"])
-
-    return backtest_data, orders, metrics
+    num_orders = len(orders)
+    return data, orders, metrics, num_orders
