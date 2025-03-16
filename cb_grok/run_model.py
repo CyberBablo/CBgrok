@@ -1,9 +1,9 @@
 import json
 import argparse
-from exchange_adapter import ExchangeAdapter
-from strategy import moving_average_strategy
-from backtest import run_backtest
-from utils import save_model_results
+from cb_grok.adapters.exchange_adapter import ExchangeAdapter
+from cb_grok.strategies.moving_average_strategy import moving_average_strategy
+from cb_grok.backtest.backtest import run_backtest
+from cb_grok.utils.utils import save_model_results
 
 def run_model(filename, initial_capital, commission):
     """

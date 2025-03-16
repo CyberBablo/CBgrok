@@ -1,0 +1,17 @@
+{
+    "short_period": 22,
+    "long_period": 119,
+    "limit": 200,
+    "rsi_period": 16,
+    "atr_period": 17,
+    "buy_rsi_threshold": 47.13653666361121,
+    "sell_rsi_threshold": 73.19982077103475,
+    "stop_loss_multiplier": 1.8690115523673358,
+    "take_profit_multiplier": 3.6965424708930414,
+    "ema_short_period": 38,
+    "ema_long_period": 125,
+    "use_trend_filter": false,
+    "use_rsi_filter": false,
+    "symbol": "XRP/USDT",
+    "timeframe": "1h"
+}

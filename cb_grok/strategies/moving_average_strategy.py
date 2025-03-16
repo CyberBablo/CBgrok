@@ -1,5 +1,5 @@
 import pandas as pd
-from indicators import calculate_moving_averages, calculate_rsi, calculate_atr, calculate_emas
+from cb_grok.indicators.indicators import calculate_moving_averages, calculate_rsi, calculate_atr, calculate_emas
 
 def trend_filter(data: pd.DataFrame) -> pd.Series:
     """

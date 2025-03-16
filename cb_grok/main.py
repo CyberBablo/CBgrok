@@ -1,5 +1,5 @@
-from exchange_adapter import ExchangeAdapter
-from optimization import optimize_backtest
+from cb_grok.adapters.exchange_adapter import ExchangeAdapter
+from cb_grok.optimization.optimization import optimize_backtest
 import pandas as pd
 import os
 import logging

@@ -1,0 +1,17 @@
+{
+    "short_period": 32,
+    "long_period": 113,
+    "limit": 500,
+    "rsi_period": 13,
+    "atr_period": 11,
+    "buy_rsi_threshold": 37.924826028231024,
+    "sell_rsi_threshold": 68.4468671742025,
+    "stop_loss_multiplier": 2.381313368313596,
+    "take_profit_multiplier": 2.5915202484290996,
+    "ema_short_period": 93,
+    "ema_long_period": 143,
+    "use_trend_filter": false,
+    "use_rsi_filter": false,
+    "symbol": "DOGE/USDT",
+    "timeframe": "1h"
+}
