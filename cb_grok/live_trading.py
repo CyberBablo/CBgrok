@@ -6,6 +6,20 @@ from cb_grok.strategies.moving_average_strategy import moving_average_strategy
 from cb_grok.utils.telegram_bot import TelegramBot
 import os
 from websockets.exceptions import ConnectionClosedOK
+import logging
+from datetime import datetime
+
+# Настройка логирования
+log_folder = "log"
+if not os.path.exists(log_folder):
+    os.makedirs(log_folder)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+log_filename = f"{log_folder}/live_trading_{timestamp}.log"
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+file_handler = logging.FileHandler(log_filename)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logger.addHandler(file_handler)
 
 def load_model_params(filename):
     """Загрузка параметров модели из файла."""
@@ -43,7 +57,7 @@ async def live_trading(filename, telegram_token, telegram_chat_id, mode="product
 
     required_candles = max(strategy_params.get("long_period", 50), strategy_params.get("ema_long_period", 200))
 
-    print(f"Подключение к {ws_url} в режиме {mode}")
+    logger.info(f"Подключение к {ws_url} в режиме {mode}")
     await telegram_bot.send_message(f"Подключение к {ws_url} в режиме {mode}")
 
     try:
@@ -78,27 +92,32 @@ async def live_trading(filename, telegram_token, telegram_chat_id, mode="product
                     current_price = float(df['close'].iloc[0])
 
                     decision = "Держать"
+                    transaction_amount = 0.0  # Для отслеживания суммы покупки/продажи
 
                     if position_open:
                         if current_price <= stop_loss:
                             decision = "Продажа (стоп-лосс)"
+                            transaction_amount = assets
                             cash += assets * current_price
                             assets = 0.0
                             position_open = False
                         elif current_price >= take_profit:
                             decision = "Продажа (тейк-профит)"
+                            transaction_amount = assets
                             cash += assets * current_price
                             assets = 0.0
                             position_open = False
                         elif latest_signal == -1:
                             decision = "Продажа (сигнал)"
+                            transaction_amount = assets
                             cash += assets * current_price
                             assets = 0.0
                             position_open = False
                     else:
                         if latest_signal == 1 and cash > 0:
                             decision = "Покупка"
-                            assets = cash / current_price
+                            transaction_amount = cash / current_price
+                            assets = transaction_amount
                             cash = 0.0
                             position_open = True
                             entry_price = current_price
@@ -106,22 +125,33 @@ async def live_trading(filename, telegram_token, telegram_chat_id, mode="product
                             take_profit = entry_price + atr * take_profit_multiplier
 
                     portfolio_value = cash + assets * current_price
+
+                    # Формируем сообщение с составом портфеля и деталями транзакции
+                    if decision == "Покупка":
+                        action_detail = f"Покупка: {transaction_amount:.2f} {symbol.split('/')[0]}"
+                    elif "Продажа" in decision:
+                        action_detail = f"Продажа: {transaction_amount:.2f} {symbol.split('/')[0]}"
+                    else:
+                        action_detail = ""
+
+                    portfolio_detail = f"({cash:.2f} USDT + {assets:.2f} {symbol.split('/')[0]})"
+
                     message = (
                         f"[{candle_time}] Символ: {symbol}, Решение: {decision}, "
-                        f"Цена: {current_price:.2f}, Портфель: {portfolio_value:.2f} USDT"
+                        f"Цена: {current_price:.2f}, {action_detail}, Портфель: {portfolio_value:.2f} USDT {portfolio_detail}"
                     )
 
                     if decision != "Держать":
                         await telegram_bot.send_message(message)
 
-                    print(message)
+                    logger.info(message)
 
                 except ConnectionClosedOK:
-                    print("Симуляция завершена, соединение закрыто.")
+                    logger.info("Симуляция завершена, соединение закрыто.")
                     break
 
     except Exception as e:
-        print(f"Ошибка при подключении к WebSocket: {e}")
+        logger.error(f"Ошибка при подключении к WebSocket: {e}")
 
 if __name__ == "__main__":
     import argparse

@@ -1,0 +1,17 @@
+{
+    "short_period": 44,
+    "long_period": 102,
+    "limit": 200,
+    "rsi_period": 14,
+    "atr_period": 18,
+    "buy_rsi_threshold": 31.330319672448923,
+    "sell_rsi_threshold": 81.33542200188325,
+    "stop_loss_multiplier": 2.464090498987903,
+    "take_profit_multiplier": 2.3500307300077647,
+    "ema_short_period": 97,
+    "ema_long_period": 177,
+    "use_trend_filter": false,
+    "use_rsi_filter": true,
+    "symbol": "ETH/USDT",
+    "timeframe": "1h"
+}

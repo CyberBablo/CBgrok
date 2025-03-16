@@ -4,6 +4,20 @@ import json
 import pandas as pd
 from datetime import datetime, timedelta
 from cb_grok.adapters.exchange_adapter import ExchangeAdapter
+import logging
+import os
+
+# Настройка логирования
+log_folder = "log"
+if not os.path.exists(log_folder):
+    os.makedirs(log_folder)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+log_filename = f"{log_folder}/simulator_{timestamp}.log"
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+file_handler = logging.FileHandler(log_filename)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logger.addHandler(file_handler)
 
 class Simulator:
     def __init__(self, symbol, timeframe, limit=500, port=8765):
@@ -17,27 +31,24 @@ class Simulator:
         """Обработчик подключений для WebSocket-сервера."""
         websocket = connection
 
-        # Вычисляем начальную дату для загрузки данных (1500 часов назад)
-
         # Загружаем данные за последние 1500 часов
         data = self.adapter.fetch_ohlcv(self.symbol, self.timeframe, limit=self.limit)
 
-        print(f"Отправка {len(data)} свечей для {self.symbol} ({self.timeframe})")
+        logger.info(f"Отправка {len(data)} свечей для {self.symbol} ({self.timeframe})")
 
         for _, row in data.iterrows():
             message_data = row.to_dict()
-            message_data['timestamp'] = row.name.isoformat()  # Используем timestamp из данных
+            message_data['timestamp'] = row.name.isoformat()
             message = json.dumps(message_data)
             await websocket.send(message)
-            await asyncio.sleep(0.001)  # Минимальная задержка для симуляции
+            await asyncio.sleep(0.001)
 
-        # Закрываем соединение
         await websocket.close(code=1000, reason="Simulation complete")
 
     async def start_server(self):
         """Запуск WebSocket-сервера."""
         server = await websockets.serve(self.handler, "localhost", self.port)
-        print(f"Симулятор запущен на ws://localhost:{self.port}")
+        logger.info(f"Симулятор запущен на ws://localhost:{self.port}")
         await asyncio.Future()
 
     def _timeframe_to_minutes(self, timeframe):
