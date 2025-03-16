@@ -1,4 +1,5 @@
+.venv
 order_bin
 trials
-.venv
+log
 backtest_results.csv
