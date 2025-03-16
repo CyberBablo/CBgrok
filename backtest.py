@@ -94,7 +94,7 @@ def objective(trial, data_fetcher, symbol, timeframe, initial_capital, commissio
                                                 sell_rsi_threshold=sell_rsi_threshold,
                                                 ema_short_period=ema_short_period, ema_long_period=ema_long_period,
                                                 use_trend_filter=use_trend_filter, use_rsi_filter=use_rsi_filter,
-                                                debug=True)
+                                                debug=False)
         _, orders, metrics = run_backtest(strategy_data, initial_capital, commission, stop_loss_multiplier,
                                           take_profit_multiplier)
 
@@ -160,7 +160,7 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
                                             ema_short_period=best_params["ema_short_period"],
                                             ema_long_period=best_params["ema_long_period"],
                                             use_trend_filter=best_params["use_trend_filter"],
-                                            use_rsi_filter=best_params["use_rsi_filter"], debug=True)
+                                            use_rsi_filter=best_params["use_rsi_filter"], debug=False)
     backtest_data, orders, metrics = run_backtest(strategy_data, initial_capital, commission,
                                                   best_params["stop_loss_multiplier"],
                                                   best_params["take_profit_multiplier"])
