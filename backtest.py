@@ -6,48 +6,49 @@ import optuna
 import os
 
 
-def run_backtest(data: pd.DataFrame, initial_capital: float, commission: float, stop_loss_pct: float = 0.02,
-                 take_profit_pct: float = 0.05):
+def run_backtest(data: pd.DataFrame, initial_capital: float, commission: float, stop_loss_multiplier: float = 1.5,
+                 take_profit_multiplier: float = 3.0):
     capital = initial_capital
     assets = 0
-    entry_price = 0  # Цена входа для расчета стоп-лосса и тейк-профита
+    entry_price = 0
+    stop_loss = 0
+    take_profit = 0
     orders = []
 
-    for i in range(len(data) - 1):  # Исключаем последнюю свечу
+    for i in range(len(data) - 1):
         signal = data['signal'].iloc[i]
-        next_open_price = data['open'].iloc[i + 1]  # Цена открытия следующей свечи
+        next_open_price = data['open'].iloc[i + 1]
         timestamp = data.index[i + 1].isoformat()
+        atr = data['atr'].iloc[i]
 
-        # Проверка стоп-лосса и тейк-профита для открытой позиции
         if assets > 0:
-            current_price = data['close'].iloc[i]  # Текущая цена для проверки условий
-            if current_price <= entry_price * (1 - stop_loss_pct):  # Стоп-лосс
-                capital = assets * next_open_price * (1 - commission)  # Исполнение на следующей свече
+            current_price = data['close'].iloc[i]
+            if current_price <= stop_loss:
+                capital = assets * next_open_price * (1 - commission)
                 orders.append({"action": "sell", "amount": assets, "price": next_open_price, "timestamp": timestamp,
                                "reason": "stop_loss"})
                 assets = 0
-            elif current_price >= entry_price * (1 + take_profit_pct):  # Тейк-профит
-                capital = assets * next_open_price * (1 - commission)  # Исполнение на следующей свече
+            elif current_price >= take_profit:
+                capital = assets * next_open_price * (1 - commission)
                 orders.append({"action": "sell", "amount": assets, "price": next_open_price, "timestamp": timestamp,
                                "reason": "take_profit"})
                 assets = 0
 
-        # Обработка сигналов стратегии
-        if signal == 1 and capital > 0:  # Покупка
-            assets = capital / next_open_price * (1 - commission)  # Исполнение на следующей свече
+        if signal == 1 and capital > 0:
+            assets = capital / next_open_price * (1 - commission)
             capital = 0
-            entry_price = next_open_price  # Запоминаем цену входа
+            entry_price = next_open_price
+            stop_loss = entry_price - atr * stop_loss_multiplier
+            take_profit = entry_price + atr * take_profit_multiplier
             orders.append({"action": "buy", "amount": assets, "price": next_open_price, "timestamp": timestamp})
-        elif signal == -1 and assets > 0:  # Продажа
-            capital = assets * next_open_price * (1 - commission)  # Исполнение на следующей свече
+        elif signal == -1 and assets > 0:
+            capital = assets * next_open_price * (1 - commission)
             orders.append({"action": "sell", "amount": assets, "price": next_open_price, "timestamp": timestamp,
                            "reason": "signal"})
             assets = 0
 
-        # Обновление портфеля
         data.loc[data.index[i + 1], 'portfolio_value'] = capital + assets * data['close'].iloc[i + 1]
 
-    # Расчет метрик
     final_value = capital + assets * data['close'].iloc[-1] if assets > 0 else capital
     equity_series = data['portfolio_value'].dropna()
     if len(equity_series) > 1:
@@ -74,17 +75,25 @@ def objective(trial, data_fetcher, symbol, timeframe, initial_capital, commissio
     long_period = trial.suggest_int("long_period", 30, 150)
     limit = trial.suggest_categorical("limit", [100, 200, 500])
     rsi_period = trial.suggest_int("rsi_period", 10, 20)
+    atr_period = trial.suggest_int("atr_period", 10, 20)
+    stop_loss_multiplier = trial.suggest_float("stop_loss_multiplier", 1.0, 3.0)
+    take_profit_multiplier = trial.suggest_float("take_profit_multiplier", 2.0, 5.0)
 
     try:
         data = data_fetcher.fetch_ohlcv(symbol, timeframe, limit)
-        strategy_data = moving_average_strategy(data.copy(), short_period, long_period, rsi_period)
-        _, orders, metrics = run_backtest(strategy_data, initial_capital, commission)
+        strategy_data = moving_average_strategy(data.copy(), short_period, long_period, rsi_period,
+                                                atr_period=atr_period, debug=True)
+        _, orders, metrics = run_backtest(strategy_data, initial_capital, commission, stop_loss_multiplier,
+                                          take_profit_multiplier)
 
         model_params = {
             "short_period": short_period,
             "long_period": long_period,
             "limit": limit,
-            "rsi_period": rsi_period
+            "rsi_period": rsi_period,
+            "atr_period": atr_period,
+            "stop_loss_multiplier": stop_loss_multiplier,
+            "take_profit_multiplier": take_profit_multiplier
         }
         save_model_results(model_params, metrics["final_value"], orders, symbol, initial_capital)
 
@@ -108,6 +117,9 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
         "long_period": trial.params["long_period"],
         "limit": trial.params["limit"],
         "rsi_period": trial.params["rsi_period"],
+        "atr_period": trial.params["atr_period"],
+        "stop_loss_multiplier": trial.params["stop_loss_multiplier"],
+        "take_profit_multiplier": trial.params["take_profit_multiplier"],
         "sharpe_ratio": trial.value
     } for trial in study.trials])
     trials_df.to_csv(f"{trials_folder}/optuna_trials_{symbol.replace('/', '_')}.csv", index=False)
@@ -117,7 +129,9 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
 
     data = data_fetcher.fetch_ohlcv(symbol, timeframe, best_params["limit"])
     strategy_data = moving_average_strategy(data.copy(), best_params["short_period"], best_params["long_period"],
-                                            best_params["rsi_period"])
-    backtest_data, orders, metrics = run_backtest(strategy_data, initial_capital, commission)
+                                            best_params["rsi_period"], atr_period=best_params["atr_period"], debug=True)
+    backtest_data, orders, metrics = run_backtest(strategy_data, initial_capital, commission,
+                                                  best_params["stop_loss_multiplier"],
+                                                  best_params["take_profit_multiplier"])
 
     return backtest_data, orders, metrics
