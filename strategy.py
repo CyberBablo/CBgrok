@@ -33,13 +33,19 @@ def trend_filter(data: pd.DataFrame) -> pd.Series:
     """Возвращает фильтр тренда: True для бычьего тренда (EMA50 > EMA200), False для медвежьего."""
     return data['ema_short'] > data['ema_long']
 
-def generate_signals(data: pd.DataFrame, buy_rsi_threshold: float, sell_rsi_threshold: float, use_trend_filter: bool = True) -> pd.DataFrame:
+def generate_signals(data: pd.DataFrame, buy_rsi_threshold: float, sell_rsi_threshold: float,
+                     use_trend_filter: bool = True, use_rsi_filter: bool = True) -> pd.DataFrame:
     """Генерирует сигналы на основе условий."""
     data['signal'] = 0
     trend = trend_filter(data) if use_trend_filter else pd.Series(True, index=data.index)
 
-    buy_condition = (data['short_ma'] > data['long_ma']) & (data['rsi'] < buy_rsi_threshold) & trend
-    sell_condition = (data['short_ma'] < data['long_ma']) & (data['rsi'] > sell_rsi_threshold) & (~trend)
+    # Условия покупки и продажи
+    if use_rsi_filter:
+        buy_condition = (data['short_ma'] > data['long_ma']) & (data['rsi'] < buy_rsi_threshold) & trend
+        sell_condition = (data['short_ma'] < data['long_ma']) & (data['rsi'] > sell_rsi_threshold) & (~trend)
+    else:
+        buy_condition = (data['short_ma'] > data['long_ma']) & trend
+        sell_condition = (data['short_ma'] < data['long_ma']) & (~trend)
 
     data.loc[buy_condition, 'signal'] = 1  # Покупка
     data.loc[sell_condition, 'signal'] = -1  # Продажа
@@ -48,12 +54,17 @@ def generate_signals(data: pd.DataFrame, buy_rsi_threshold: float, sell_rsi_thre
 
 def moving_average_strategy(data: pd.DataFrame, short_period: int, long_period: int, rsi_period: int, atr_period: int = 14,
                             buy_rsi_threshold: float = 45, sell_rsi_threshold: float = 55, ema_short_period: int = 50,
-                            ema_long_period: int = 200, use_trend_filter: bool = True, debug: bool = False) -> pd.DataFrame:
-    """Основная функция стратегии с возможностью включения/выключения фильтра тренда."""
+                            ema_long_period: int = 200, use_trend_filter: bool = True, use_rsi_filter: bool = True,
+                            debug: bool = False) -> pd.DataFrame:
+    """Основная функция стратегии с гибкими фильтрами."""
+    # Проверка минимального количества данных
+    if len(data) < max(long_period, ema_long_period):
+        raise ValueError(f"Недостаточно данных: требуется минимум {max(long_period, ema_long_period)} свечей")
+
     # Рассчитываем индикаторы
     data = calculate_indicators(data, short_period, long_period, rsi_period, atr_period, ema_short_period, ema_long_period)
     # Генерируем сигналы
-    data = generate_signals(data, buy_rsi_threshold, sell_rsi_threshold, use_trend_filter)
+    data = generate_signals(data, buy_rsi_threshold, sell_rsi_threshold, use_trend_filter, use_rsi_filter)
 
     if debug:
         logging.info("Debugging strategy:")
@@ -61,12 +72,12 @@ def moving_average_strategy(data: pd.DataFrame, short_period: int, long_period: 
             close = data['close'].iloc[i]
             short_ma = data['short_ma'].iloc[i]
             long_ma = data['long_ma'].iloc[i]
-            rsi = data['rsi'].iloc[i]
+            rsi = data['rsi'].iloc[i] if not pd.isna(data['rsi'].iloc[i]) else 'nan'
             ema_short = data['ema_short'].iloc[i]
             ema_long = data['ema_long'].iloc[i]
             signal = data['signal'].iloc[i]
             logging.info(f"Timestamp: {data.index[i]}, close={close:.2f}, short_ma={short_ma:.2f}, long_ma={long_ma:.2f}, "
-                         f"rsi={rsi:.2f}, ema_short={ema_short:.2f}, ema_long={ema_long:.2f}, signal={signal}")
+                         f"rsi={rsi}, ema_short={ema_short:.2f}, ema_long={ema_long:.2f}, signal={signal}")
         logging.info(f"Buy conditions met: {(data['signal'] == 1).sum()}, Sell conditions met: {(data['signal'] == -1).sum()}")
 
     return data

@@ -71,23 +71,30 @@ def run_backtest(data: pd.DataFrame, initial_capital: float, commission: float, 
 
 
 def objective(trial, data_fetcher, symbol, timeframe, initial_capital, commission):
-    # Расширенные диапазоны для оптимизации
-    short_period = trial.suggest_int("short_period", 5, 50)  # Расширен до 50
-    long_period = trial.suggest_int("long_period", 20, 200)  # Расширен до 200
-    limit = trial.suggest_categorical("limit", [100, 200, 500])
+    # Оптимизируемые параметры
+    short_period = trial.suggest_int("short_period", 5, 50)
+    long_period = trial.suggest_int("long_period", 20, 200)
+    limit = trial.suggest_categorical("limit", [200, 500, 1000])  # Увеличен минимальный лимит до 200
     rsi_period = trial.suggest_int("rsi_period", 10, 20)
     atr_period = trial.suggest_int("atr_period", 10, 20)
-    buy_rsi_threshold = trial.suggest_float("buy_rsi_threshold", 20, 50)  # Расширен до 20-50
-    sell_rsi_threshold = trial.suggest_float("sell_rsi_threshold", 50, 80)  # Расширен до 50-80
+    buy_rsi_threshold = trial.suggest_float("buy_rsi_threshold", 10, 60)  # Расширен диапазон
+    sell_rsi_threshold = trial.suggest_float("sell_rsi_threshold", 40, 90)  # Расширен диапазон
     stop_loss_multiplier = trial.suggest_float("stop_loss_multiplier", 1.0, 3.0)
     take_profit_multiplier = trial.suggest_float("take_profit_multiplier", 2.0, 5.0)
+    ema_short_period = trial.suggest_int("ema_short_period", 20, 100)
+    ema_long_period = trial.suggest_int("ema_long_period", 100, 300)
+    use_trend_filter = trial.suggest_categorical("use_trend_filter", [True, False])
+    use_rsi_filter = trial.suggest_categorical("use_rsi_filter", [True, False])
 
     try:
         data = data_fetcher.fetch_ohlcv(symbol, timeframe, limit)
         strategy_data = moving_average_strategy(data.copy(), short_period, long_period, rsi_period,
                                                 atr_period=atr_period,
                                                 buy_rsi_threshold=buy_rsi_threshold,
-                                                sell_rsi_threshold=sell_rsi_threshold, debug=True)
+                                                sell_rsi_threshold=sell_rsi_threshold,
+                                                ema_short_period=ema_short_period, ema_long_period=ema_long_period,
+                                                use_trend_filter=use_trend_filter, use_rsi_filter=use_rsi_filter,
+                                                debug=True)
         _, orders, metrics = run_backtest(strategy_data, initial_capital, commission, stop_loss_multiplier,
                                           take_profit_multiplier)
 
@@ -100,16 +107,21 @@ def objective(trial, data_fetcher, symbol, timeframe, initial_capital, commissio
             "buy_rsi_threshold": buy_rsi_threshold,
             "sell_rsi_threshold": sell_rsi_threshold,
             "stop_loss_multiplier": stop_loss_multiplier,
-            "take_profit_multiplier": take_profit_multiplier
+            "take_profit_multiplier": take_profit_multiplier,
+            "ema_short_period": ema_short_period,
+            "ema_long_period": ema_long_period,
+            "use_trend_filter": use_trend_filter,
+            "use_rsi_filter": use_rsi_filter
         }
         save_model_results(model_params, metrics["final_value"], orders, symbol, initial_capital)
 
         return metrics["sharpe_ratio"]
-    except Exception:
+    except Exception as e:
+        print(f"Ошибка в trial для {symbol}: {e}")
         return -float('inf')
 
 
-def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commission, n_trials=50):
+def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commission, n_trials=100):
     study = optuna.create_study(direction="maximize")
     study.optimize(lambda trial: objective(trial, data_fetcher, symbol, timeframe, initial_capital, commission),
                    n_trials=n_trials)
@@ -129,6 +141,10 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
         "sell_rsi_threshold": trial.params["sell_rsi_threshold"],
         "stop_loss_multiplier": trial.params["stop_loss_multiplier"],
         "take_profit_multiplier": trial.params["take_profit_multiplier"],
+        "ema_short_period": trial.params["ema_short_period"],
+        "ema_long_period": trial.params["ema_long_period"],
+        "use_trend_filter": trial.params["use_trend_filter"],
+        "use_rsi_filter": trial.params["use_rsi_filter"],
         "sharpe_ratio": trial.value
     } for trial in study.trials])
     trials_df.to_csv(f"{trials_folder}/optuna_trials_{symbol.replace('/', '_')}.csv", index=False)
@@ -140,7 +156,11 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
     strategy_data = moving_average_strategy(data.copy(), best_params["short_period"], best_params["long_period"],
                                             best_params["rsi_period"], atr_period=best_params["atr_period"],
                                             buy_rsi_threshold=best_params["buy_rsi_threshold"],
-                                            sell_rsi_threshold=best_params["sell_rsi_threshold"], debug=True)
+                                            sell_rsi_threshold=best_params["sell_rsi_threshold"],
+                                            ema_short_period=best_params["ema_short_period"],
+                                            ema_long_period=best_params["ema_long_period"],
+                                            use_trend_filter=best_params["use_trend_filter"],
+                                            use_rsi_filter=best_params["use_rsi_filter"], debug=True)
     backtest_data, orders, metrics = run_backtest(strategy_data, initial_capital, commission,
                                                   best_params["stop_loss_multiplier"],
                                                   best_params["take_profit_multiplier"])
