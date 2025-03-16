@@ -71,18 +71,23 @@ def run_backtest(data: pd.DataFrame, initial_capital: float, commission: float, 
 
 
 def objective(trial, data_fetcher, symbol, timeframe, initial_capital, commission):
-    short_period = trial.suggest_int("short_period", 5, 30)
-    long_period = trial.suggest_int("long_period", 30, 150)
+    # Расширенные диапазоны для оптимизации
+    short_period = trial.suggest_int("short_period", 5, 50)  # Расширен до 50
+    long_period = trial.suggest_int("long_period", 20, 200)  # Расширен до 200
     limit = trial.suggest_categorical("limit", [100, 200, 500])
     rsi_period = trial.suggest_int("rsi_period", 10, 20)
     atr_period = trial.suggest_int("atr_period", 10, 20)
+    buy_rsi_threshold = trial.suggest_float("buy_rsi_threshold", 20, 50)  # Расширен до 20-50
+    sell_rsi_threshold = trial.suggest_float("sell_rsi_threshold", 50, 80)  # Расширен до 50-80
     stop_loss_multiplier = trial.suggest_float("stop_loss_multiplier", 1.0, 3.0)
     take_profit_multiplier = trial.suggest_float("take_profit_multiplier", 2.0, 5.0)
 
     try:
         data = data_fetcher.fetch_ohlcv(symbol, timeframe, limit)
         strategy_data = moving_average_strategy(data.copy(), short_period, long_period, rsi_period,
-                                                atr_period=atr_period, debug=True)
+                                                atr_period=atr_period,
+                                                buy_rsi_threshold=buy_rsi_threshold,
+                                                sell_rsi_threshold=sell_rsi_threshold, debug=True)
         _, orders, metrics = run_backtest(strategy_data, initial_capital, commission, stop_loss_multiplier,
                                           take_profit_multiplier)
 
@@ -92,6 +97,8 @@ def objective(trial, data_fetcher, symbol, timeframe, initial_capital, commissio
             "limit": limit,
             "rsi_period": rsi_period,
             "atr_period": atr_period,
+            "buy_rsi_threshold": buy_rsi_threshold,
+            "sell_rsi_threshold": sell_rsi_threshold,
             "stop_loss_multiplier": stop_loss_multiplier,
             "take_profit_multiplier": take_profit_multiplier
         }
@@ -118,6 +125,8 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
         "limit": trial.params["limit"],
         "rsi_period": trial.params["rsi_period"],
         "atr_period": trial.params["atr_period"],
+        "buy_rsi_threshold": trial.params["buy_rsi_threshold"],
+        "sell_rsi_threshold": trial.params["sell_rsi_threshold"],
         "stop_loss_multiplier": trial.params["stop_loss_multiplier"],
         "take_profit_multiplier": trial.params["take_profit_multiplier"],
         "sharpe_ratio": trial.value
@@ -129,7 +138,9 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
 
     data = data_fetcher.fetch_ohlcv(symbol, timeframe, best_params["limit"])
     strategy_data = moving_average_strategy(data.copy(), best_params["short_period"], best_params["long_period"],
-                                            best_params["rsi_period"], atr_period=best_params["atr_period"], debug=True)
+                                            best_params["rsi_period"], atr_period=best_params["atr_period"],
+                                            buy_rsi_threshold=best_params["buy_rsi_threshold"],
+                                            sell_rsi_threshold=best_params["sell_rsi_threshold"], debug=True)
     backtest_data, orders, metrics = run_backtest(strategy_data, initial_capital, commission,
                                                   best_params["stop_loss_multiplier"],
                                                   best_params["take_profit_multiplier"])
