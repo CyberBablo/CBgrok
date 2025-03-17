@@ -1,0 +1,20 @@
+{
+    "short_period": 32,
+    "long_period": 39,
+    "limit": 500,
+    "rsi_period": 13,
+    "atr_period": 11,
+    "buy_rsi_threshold": 35.841953468493855,
+    "sell_rsi_threshold": 86.8962145103804,
+    "stop_loss_multiplier": 1.5176081630824023,
+    "take_profit_multiplier": 4.928577051762029,
+    "ema_short_period": 56,
+    "ema_long_period": 201,
+    "use_trend_filter": false,
+    "use_rsi_filter": true,
+    "adx_period": 20,
+    "adx_threshold": 22.80851406457609,
+    "use_adx_filter": true,
+    "symbol": "TRX/USDT",
+    "timeframe": "1h"
+}

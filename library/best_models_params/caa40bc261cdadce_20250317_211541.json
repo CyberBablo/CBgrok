@@ -1,0 +1,20 @@
+{
+    "short_period": 20,
+    "long_period": 125,
+    "limit": 500,
+    "rsi_period": 19,
+    "atr_period": 17,
+    "buy_rsi_threshold": 35.98772390736481,
+    "sell_rsi_threshold": 84.4805769787334,
+    "stop_loss_multiplier": 1.4604594977560865,
+    "take_profit_multiplier": 2.0960893338678446,
+    "ema_short_period": 57,
+    "ema_long_period": 191,
+    "use_trend_filter": false,
+    "use_rsi_filter": true,
+    "adx_period": 15,
+    "adx_threshold": 31.790482763221327,
+    "use_adx_filter": true,
+    "symbol": "SOL/USDT",
+    "timeframe": "1h"
+}
