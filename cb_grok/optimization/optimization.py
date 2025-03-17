@@ -8,10 +8,9 @@ import json
 import hashlib
 from datetime import datetime
 
-
 def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commission, n_trials=100, logger=None):
     """
-    Оптимизирует параметры стратегии с использованием Optuna и сохраняет лучшие параметры в JSON-файл.
+    Оптимизирует параметры стратегии с использованием Optuna на обучающем наборе и валидирует на валидационном наборе.
 
     :param data_fetcher: Объект для загрузки данных.
     :param symbol: Символ торговой пары.
@@ -20,46 +19,56 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
     :param commission: Комиссия.
     :param n_trials: Количество испытаний.
     :param logger: Объект для логирования.
-    :return: Кортеж (backtest_data, orders, metrics, num_orders) для лучших параметров.
+    :return: Кортеж (backtest_data, orders, metrics, num_orders) для лучших параметров на валидационном наборе.
     """
+    # Определение даты разделения: 1 марта 2025 года
+    split_date = pd.to_datetime("2025-02-23 00:00:00")
+
+    # Загрузка данных для обучения и валидации
+    full_data = data_fetcher.fetch_ohlcv(symbol, timeframe, limit=10000)  # Увеличен лимит до 10,000 свечей
+    train_data = full_data[full_data.index < split_date]
+    val_data = full_data[full_data.index >= split_date]
+
+    # Проверка минимального объема данных
+    # if len(train_data) < 5000 or len(val_data) < 1000:
+    #     if logger:
+    #         logger.error(f"Недостаточно данных: Обучающий набор = {len(train_data)} свечей, "
+    #                      f"Валидационный набор = {len(val_data)} свечей. Требуется минимум 5000 и 1000 соответственно.")
+    #     raise ValueError(f"Недостаточно данных: Обучающий набор = {len(train_data)} свечей, "
+    #                      f"Валидационный набор = {len(val_data)} свечей.")
+
+    if logger:
+        logger.info(f"Обучающий набор: {len(train_data)} свечей, Валидационный набор: {len(val_data)} свечей")
 
     def objective(trial):
-        # Определяем параметры для оптимизации, включая новые параметры ADX
+        # Определяем параметры для оптимизации с расширенными диапазонами
         params = {
-            "short_period": trial.suggest_int("short_period", 5, 50),
-            "long_period": trial.suggest_int("long_period", 20, 200),
-            "limit": trial.suggest_categorical("limit", [200, 500, 1000, 1500]),
-            "rsi_period": trial.suggest_int("rsi_period", 10, 20),
-            "atr_period": trial.suggest_int("atr_period", 10, 20),
-            "buy_rsi_threshold": trial.suggest_float("buy_rsi_threshold", 10, 60),
-            "sell_rsi_threshold": trial.suggest_float("sell_rsi_threshold", 40, 90),
-            "stop_loss_multiplier": trial.suggest_float("stop_loss_multiplier", 1.0, 3.0),
-            "take_profit_multiplier": trial.suggest_float("take_profit_multiplier", 2.0, 5.0),
-            "ema_short_period": trial.suggest_int("ema_short_period", 20, 100),
-            "ema_long_period": trial.suggest_int("ema_long_period", 100, 300),
+            "short_period": trial.suggest_int("short_period", 5, 15),
+            "long_period": trial.suggest_int("long_period", 20, 50),
+            "limit": trial.suggest_categorical("limit", [1000, 2000, 3000]),
+            "rsi_period": trial.suggest_int("rsi_period", 8, 16),
+            "atr_period": trial.suggest_int("atr_period", 8, 16),
+            "buy_rsi_threshold": trial.suggest_float("buy_rsi_threshold", 15, 35),  # Расширен диапазон
+            "sell_rsi_threshold": trial.suggest_float("sell_rsi_threshold", 65, 85),  # Расширен диапазон
+            "stop_loss_multiplier": trial.suggest_float("stop_loss_multiplier", 0.8, 2.0),
+            "take_profit_multiplier": trial.suggest_float("take_profit_multiplier", 1.5, 3.5),
+            "ema_short_period": trial.suggest_int("ema_short_period", 15, 40),
+            "ema_long_period": trial.suggest_int("ema_long_period", 80, 150),
             "use_trend_filter": trial.suggest_categorical("use_trend_filter", [True, False]),
             "use_rsi_filter": trial.suggest_categorical("use_rsi_filter", [True, False]),
-            "adx_period": trial.suggest_int("adx_period", 10, 20),
-            "adx_threshold": trial.suggest_float("adx_threshold", 20, 40),
-            "use_adx_filter": trial.suggest_categorical("use_adx_filter", [True, False])
+            "adx_period": trial.suggest_int("adx_period", 8, 16),
+            "adx_threshold": trial.suggest_float("adx_threshold", 15, 30),
+            "use_adx_filter": trial.suggest_categorical("use_adx_filter", [True, False]),
+            "atr_threshold": trial.suggest_float("atr_threshold", 0.0, 1.0)  # Расширен диапазон
         }
-        # Корректируем limit, если он меньше максимального периода
-        required_limit = max(params["long_period"], params["ema_long_period"], params["adx_period"] if params["use_adx_filter"] else 0)
-        if params["limit"] < required_limit:
-            params["limit"] = required_limit
+        # Штраф за сложность модели
+        complexity_penalty = (int(params["use_trend_filter"]) + int(params["use_rsi_filter"]) +
+                              int(params["use_adx_filter"])) * -0.05
 
         try:
-            # Загружаем данные
-            data = data_fetcher.fetch_ohlcv(symbol, timeframe, params["limit"])
-            # Логируем начальную и конечную даты
-            start_date = data.index.min().strftime("%Y-%m-%d %H:%M:%S")
-            end_date = data.index.max().strftime("%Y-%m-%d %H:%M:%S")
-            if logger:
-                logger.info(f"Начало торгового периода: {start_date}, Конец торгового периода: {end_date}")
-
-            # Применяем стратегию с новыми параметрами
-            strategy_data = moving_average_strategy(
-                data.copy(),
+            # Тестирование на обучающем наборе
+            strategy_data_train = moving_average_strategy(
+                train_data.copy(),
                 short_period=params["short_period"],
                 long_period=params["long_period"],
                 rsi_period=params["rsi_period"],
@@ -73,96 +82,132 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
                 adx_period=params["adx_period"],
                 use_adx_filter=params["use_adx_filter"],
                 adx_threshold=params["adx_threshold"],
+                atr_threshold=params["atr_threshold"],
                 debug=False,
                 logger=logger
             )
-            # Запускаем бэктест
-            _, orders, metrics, num_orders = run_backtest(
-                strategy_data,
+            _, _, metrics_train, num_orders_train = run_backtest(
+                strategy_data_train,
                 initial_capital,
                 commission,
                 params["stop_loss_multiplier"],
                 params["take_profit_multiplier"]
             )
+            if num_orders_train < 10:
+                if logger:
+                    logger.debug(f"Trial {trial.number}: Недостаточно ордеров на обучении ({num_orders_train})")
+                return -float('inf')
 
-            # Сохраняем результаты в order_bin
-            save_model_results(params, metrics["final_value"], orders, symbol, initial_capital)
+            # Тестирование на валидационном наборе
+            strategy_data_val = moving_average_strategy(
+                val_data.copy(),
+                short_period=params["short_period"],
+                long_period=params["long_period"],
+                rsi_period=params["rsi_period"],
+                atr_period=params["atr_period"],
+                buy_rsi_threshold=params["buy_rsi_threshold"],
+                sell_rsi_threshold=params["sell_rsi_threshold"],
+                ema_short_period=params["ema_short_period"],
+                ema_long_period=params["ema_long_period"],
+                use_trend_filter=params["use_trend_filter"],
+                use_rsi_filter=params["use_rsi_filter"],
+                adx_period=params["adx_period"],
+                use_adx_filter=params["use_adx_filter"],
+                adx_threshold=params["adx_threshold"],
+                atr_threshold=params["atr_threshold"],
+                debug=False,
+                logger=logger
+            )
+            _, _, metrics_val, num_orders_val = run_backtest(
+                strategy_data_val,
+                initial_capital,
+                commission,
+                params["stop_loss_multiplier"],
+                params["take_profit_multiplier"]
+            )
+            if num_orders_val < 5:
+                if logger:
+                    logger.debug(f"Trial {trial.number}: Недостаточно ордеров на валидации ({num_orders_val})")
+                return -float('inf')
 
-            return metrics["sharpe_ratio"]
+            # Целевая функция: Среднее Sharpe Ratio с учетом числа сделок
+            sharpe_combined = (metrics_train["sharpe_ratio"] + metrics_val["sharpe_ratio"]) / 2
+            return sharpe_combined + complexity_penalty
+
         except Exception as e:
             if logger:
-                logger.error(f"Ошибка в trial для {symbol}: {e}")
+                logger.error(f"Ошибка в trial {trial.number} для {symbol}: {e}")
             return -float('inf')
 
+    # Настройка логирования Optuna
+    optuna.logging.set_verbosity(optuna.logging.INFO)
+    if logger:
+        optuna.logging.enable_default_handler()
+        optuna.logging.enable_propagation()
+
+    # Создание и запуск оптимизации
     study = optuna.create_study(direction="maximize")
     study.optimize(objective, n_trials=n_trials)
 
-    # Получаем лучшие параметры
     best_params = study.best_params
     if logger:
-        logger.info(f"Лучшие параметры для {symbol}: {best_params}, Sharpe Ratio: {study.best_value:.2f}")
+        logger.info(f"Лучшие параметры для {symbol}: {best_params}, Лучшее значение: {study.best_value:.2f}")
 
-    # Корректируем limit для лучших параметров
-    required_limit = max(best_params["long_period"], best_params["ema_long_period"], best_params["adx_period"] if best_params["use_adx_filter"] else 0)
-    if best_params["limit"] < required_limit:
-        best_params["limit"] = required_limit
+    # Финальная валидация на валидационном наборе
+    try:
+        strategy_data_val = moving_average_strategy(
+            val_data.copy(),
+            short_period=best_params["short_period"],
+            long_period=best_params["long_period"],
+            rsi_period=best_params["rsi_period"],
+            atr_period=best_params["atr_period"],
+            buy_rsi_threshold=best_params["buy_rsi_threshold"],
+            sell_rsi_threshold=best_params["sell_rsi_threshold"],
+            ema_short_period=best_params["ema_short_period"],
+            ema_long_period=best_params["ema_long_period"],
+            use_trend_filter=best_params["use_trend_filter"],
+            use_rsi_filter=best_params["use_rsi_filter"],
+            adx_period=best_params["adx_period"],
+            use_adx_filter=best_params["use_adx_filter"],
+            adx_threshold=best_params["adx_threshold"],
+            atr_threshold=best_params["atr_threshold"],
+            debug=True,  # Включен дебаг для анализа
+            logger=logger
+        )
+        backtest_data, orders, metrics, num_orders = run_backtest(
+            strategy_data_val,
+            initial_capital,
+            commission,
+            best_params["stop_loss_multiplier"],
+            best_params["take_profit_multiplier"]
+        )
+        if logger:
+            logger.info(f"Результаты на валидационном наборе: Sharpe Ratio = {metrics['sharpe_ratio']:.2f}, "
+                        f"Итоговый капитал = {metrics['final_value']:.2f}, Количество ордеров = {num_orders}")
 
-    # Генерируем хэш только на основе параметров модели
-    params_str = json.dumps(best_params, sort_keys=True)
-    hash_object = hashlib.sha256(params_str.encode())
-    hash_hex = hash_object.hexdigest()[:16]
+        # Сохранение параметров даже при нулевом Sharpe Ratio для анализа
+        if num_orders >= 5:
+            params_str = json.dumps(best_params, sort_keys=True)
+            hash_object = hashlib.sha256(params_str.encode())
+            hash_hex = hash_object.hexdigest()[:16]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            best_model_filename = f"library/best_models_params/{hash_hex}_{timestamp}.json"
+            best_params_with_meta = best_params.copy()
+            best_params_with_meta["symbol"] = symbol
+            best_params_with_meta["timeframe"] = timeframe
+            best_params_with_meta["sharpe_ratio"] = metrics["sharpe_ratio"]
+            best_params_with_meta["num_orders"] = num_orders
+            with open(best_model_filename, 'w') as f:
+                json.dump(best_params_with_meta, f, indent=4)
+            if logger:
+                logger.info(f"Лучшие параметры сохранены в {best_model_filename}")
+        else:
+            if logger:
+                logger.warning(f"Параметры не сохранены: Количество ордеров ({num_orders}) < 5")
 
-    # Генерируем временную метку
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return backtest_data, orders, metrics, num_orders
 
-    # Создаём директорию, если её нет
-    best_models_folder = "library/best_models_params"
-    if not os.path.exists(best_models_folder):
-        os.makedirs(best_models_folder)
-
-    # Имя файла: hash_timestamp.json
-    best_model_filename = f"{best_models_folder}/{hash_hex}_{timestamp}.json"
-
-    # Сохраняем лучшие параметры вместе с symbol и timeframe
-    best_params_with_meta = best_params.copy()
-    best_params_with_meta["symbol"] = symbol
-    best_params_with_meta["timeframe"] = timeframe
-    with open(best_model_filename, 'w') as f:
-        json.dump(best_params_with_meta, f, indent=4)
-
-    if logger:
-        logger.info(f"Лучшие параметры сохранены в {best_model_filename}")
-
-    # Выполняем финальный бэктест с лучшими параметрами
-    data = data_fetcher.fetch_ohlcv(symbol, timeframe, best_params["limit"])
-    # Логируем начальную и конечную даты для финального бэктеста
-    start_date = data.index.min().strftime("%Y-%m-%d %H:%M:%S")
-    end_date = data.index.max().strftime("%Y-%m-%d %H:%M:%S")
-    if logger:
-        logger.info(f"Начало торгового периода: {start_date}, Конец торгового периода: {end_date}")
-
-    strategy_data = moving_average_strategy(
-        data.copy(),
-        short_period=best_params["short_period"],
-        long_period=best_params["long_period"],
-        rsi_period=best_params["rsi_period"],
-        atr_period=best_params["atr_period"],
-        buy_rsi_threshold=best_params["buy_rsi_threshold"],
-        sell_rsi_threshold=best_params["sell_rsi_threshold"],
-        ema_short_period=best_params["ema_short_period"],
-        ema_long_period=best_params["ema_long_period"],
-        use_trend_filter=best_params["use_trend_filter"],
-        use_rsi_filter=best_params["use_rsi_filter"],
-        adx_period=best_params["adx_period"],
-        use_adx_filter=best_params["use_adx_filter"],
-        adx_threshold=best_params["adx_threshold"],
-        debug=False,
-        logger=logger
-    )
-    return run_backtest(
-        strategy_data,
-        initial_capital,
-        commission,
-        best_params["stop_loss_multiplier"],
-        best_params["take_profit_multiplier"]
-    )
+    except Exception as e:
+        if logger:
+            logger.error(f"Ошибка при валидации для {symbol}: {e}")
+        raise

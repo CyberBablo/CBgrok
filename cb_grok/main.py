@@ -9,13 +9,12 @@ from cb_grok.backtest.backtest import run_backtest
 from cb_grok.live_trading import live_trading
 import asyncio
 
-
 def main(mode, exchange_name='binance', api_key=None, api_secret=None, symbols=None, timeframe='1h',
          initial_capital=10000, commission=0.00075, n_trials=100, model_file=None, telegram_token=None,
-         telegram_chat_id=None, category='linear'):
+         telegram_chat_id=None, category='linear', live_trading_mode="production"):
     """Запускает программу в указанном режиме."""
     if symbols is None:
-        symbols = ['BTC/USDT', 'ETH/USDT', 'XRP/USDT', 'BNB/USDT', 'ADA/USDT', 'SOL/USDT', 'DOGE/USDT', 'TRX/USDT']
+        symbols = ['BNB/USDT']
 
     # Настройка логирования
     log_folder = "log"
@@ -52,6 +51,7 @@ def main(mode, exchange_name='binance', api_key=None, api_secret=None, symbols=N
         results_df.to_csv("backtest_results.csv", index=False)
         logger.info("Общие результаты оптимизации:")
         logger.info(results_df.to_string())
+        logger.info(f"Exchange name: {adapter.exchange_name}")
 
     elif mode == 'backtest':
         if not model_file:
@@ -63,7 +63,7 @@ def main(mode, exchange_name='binance', api_key=None, api_secret=None, symbols=N
     elif mode == 'live_trading':
         if not (model_file and telegram_token and telegram_chat_id):
             raise ValueError("Для live_trading требуется model_file, telegram_token и telegram_chat_id")
-        asyncio.run(live_trading(model_file, telegram_token, telegram_chat_id, mode="production",
+        asyncio.run(live_trading(model_file, telegram_token, telegram_chat_id, mode=live_trading_mode,
                                  initial_capital=initial_capital, exchange_name=exchange_name,
                                  api_key=api_key, api_secret=api_secret, category=category, timeframe=timeframe))
         logger.info("Запущена торговля в реальном времени")
@@ -71,18 +71,17 @@ def main(mode, exchange_name='binance', api_key=None, api_secret=None, symbols=N
     else:
         raise ValueError(f"Неверный режим: {mode}. Используйте 'optimizer', 'backtest' или 'live_trading'")
 
-
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python main.py <mode> [--exchange_name] [--api_key] [--api_secret] [--symbols] "
               "[--timeframe] [--initial_capital] [--commission] [--n_trials] [--model_file] "
-              "[--telegram_token] [--telegram_chat_id] [--category]")
+              "[--telegram_token] [--telegram_chat_id] [--category] [--live_trading_mode]")
         sys.exit(1)
 
     mode = sys.argv[1]
     args = {arg.split('=')[0].strip('--'): arg.split('=')[1] for arg in sys.argv[2:] if '=' in arg}
 
-    exchange_name = args.get('exchange_name', 'binance')
+    exchange_name = args.get('exchange_name', 'bybit')
     api_key = args.get('api_key')
     api_secret = args.get('api_secret')
     symbols = args.get('symbols', None)
@@ -96,6 +95,7 @@ if __name__ == "__main__":
     telegram_token = args.get('telegram_token')
     telegram_chat_id = args.get('telegram_chat_id')
     category = args.get('category', 'linear')
+    live_trading_mode = args.get('live_trading_mode', 'production')
 
     main(mode, exchange_name, api_key, api_secret, symbols, timeframe, initial_capital, commission,
-         n_trials, model_file, telegram_token, telegram_chat_id, category)
+         n_trials, model_file, telegram_token, telegram_chat_id, category, live_trading_mode)

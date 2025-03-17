@@ -1,9 +1,9 @@
 import ccxt
 import pandas as pd
+import time
 
 class ExchangeAdapter:
     def __init__(self, exchange_name='binance', api_key=None, api_secret=None):
-        """Инициализация адаптера для выбранной биржи."""
         if exchange_name == 'binance':
             self.exchange = ccxt.binance({
                 'apiKey': api_key,
@@ -20,28 +20,49 @@ class ExchangeAdapter:
             raise ValueError(f"Неподдерживаемая биржа: {exchange_name}")
         self.exchange_name = exchange_name
 
-    def fetch_ohlcv(self, symbol, timeframe='1m', limit=1000):
-        """Загрузка OHLCV-данных с биржи."""
-        ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    def fetch_ohlcv(self, symbol, timeframe='1m', limit=1000, total_limit=5000):
+        all_data = []
+        max_per_request = 1000 if self.exchange_name == 'bybit' else limit
+        since = None
+        while len(all_data) < total_limit:
+            try:
+                ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=max_per_request)
+                if not ohlcv:
+                    break
+                all_data.extend(ohlcv)
+                since = ohlcv[0][0] - (max_per_request * self._timeframe_to_milliseconds(timeframe))
+                time.sleep(self.exchange.rateLimit / 1000)
+            except Exception as e:
+                print(f"Ошибка при загрузке данных: {e}")
+                break
+        all_data = all_data[-total_limit:]
+        df = pd.DataFrame(all_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         df.set_index('timestamp', inplace=True)
         return df
 
+    def _timeframe_to_milliseconds(self, timeframe):
+        if timeframe == '1m':
+            return 60 * 1000
+        elif timeframe == '1h':
+            return 3600 * 1000
+        elif timeframe == '1d':
+            return 86400 * 1000
+        else:
+            raise ValueError(f"Неподдерживаемый таймфрейм: {timeframe}")
+
     def create_order(self, symbol, side, amount, price=None, stop_loss=None, take_profit=None):
-        """Создание ордера с поддержкой stop-loss и take-profit."""
         params = {}
         if stop_loss:
-            params['stop_loss'] = stop_loss  # Bybit использует 'stop_loss'
+            params['stop_loss'] = stop_loss
             if self.exchange_name == 'binance':
-                params['stopPrice'] = stop_loss  # Binance использует 'stopPrice' для стоп-ордеров
+                params['stopPrice'] = stop_loss
         if take_profit:
-            params['take_profit'] = take_profit  # Bybit использует 'take_profit'
+            params['take_profit'] = take_profit
             if self.exchange_name == 'binance':
-                params['takeProfitPrice'] = take_profit  # Binance требует отдельной настройки
+                params['takeProfitPrice'] = take_profit
         order_type = 'limit' if price else 'market'
         return self.exchange.create_order(symbol, order_type, side, amount, price, params)
 
     def fetch_balance(self):
-        """Получение баланса аккаунта."""
         return self.exchange.fetch_balance()

@@ -110,10 +110,25 @@ async def live_trading(filename, telegram_token, telegram_chat_id, mode="product
                     response = await websocket.recv()
                     data = json.loads(response)
 
+                    # Обработка данных в зависимости от режима
+                    if mode == "simulation":
+                        # Ожидаем данные в формате {'open': ..., 'high': ..., 'low': ..., 'close': ..., 'volume': ..., 'timestamp': ...}
+                        candle_time = pd.to_datetime(data['timestamp'])
+                        df = pd.DataFrame([{
+                            'open': float(data['open']),
+                            'high': float(data['high']),
+                            'low': float(data['low']),
+                            'close': float(data['close']),
+                            'volume': float(data['volume']),
+                            'timestamp': candle_time
+                        }])
+                        df.set_index('timestamp', inplace=True)
+                        data_buffer = pd.concat([data_buffer, df])
+
                     # Обработка данных от Bybit
-                    if exchange_name == 'bybit' and 'topic' in data and data['topic'].startswith('kline'):
+                    elif exchange_name == 'bybit' and 'topic' in data and data['topic'].startswith('kline'):
                         candle = data['data'][0]
-                        candle_time = pd.to_datetime(candle['start'], unit='ms')  # Исправлено на миллисекунды
+                        candle_time = pd.to_datetime(candle['start'], unit='ms')
                         df = pd.DataFrame([{
                             'open': float(candle['open']),
                             'high': float(candle['high']),
@@ -154,7 +169,7 @@ async def live_trading(filename, telegram_token, telegram_chat_id, mode="product
                     latest_signal = strategy_data['signal'].iloc[-1]
                     atr = strategy_data['atr'].iloc[-1]
                     current_price = float(df['close'].iloc[0])
-
+                    logger.info(f"Текущая цена: {current_price}")
                     decision = "Держать"
                     transaction_amount = 0.0
 
