@@ -24,7 +24,7 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
     """
 
     def objective(trial):
-        # Определяем параметры для оптимизации
+        # Определяем параметры для оптимизации, включая новые параметры ADX
         params = {
             "short_period": trial.suggest_int("short_period", 5, 50),
             "long_period": trial.suggest_int("long_period", 20, 200),
@@ -38,10 +38,13 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
             "ema_short_period": trial.suggest_int("ema_short_period", 20, 100),
             "ema_long_period": trial.suggest_int("ema_long_period", 100, 300),
             "use_trend_filter": trial.suggest_categorical("use_trend_filter", [True, False]),
-            "use_rsi_filter": trial.suggest_categorical("use_rsi_filter", [True, False])
+            "use_rsi_filter": trial.suggest_categorical("use_rsi_filter", [True, False]),
+            "adx_period": trial.suggest_int("adx_period", 10, 20),
+            "adx_threshold": trial.suggest_float("adx_threshold", 20, 40),
+            "use_adx_filter": trial.suggest_categorical("use_adx_filter", [True, False])
         }
         # Корректируем limit, если он меньше максимального периода
-        required_limit = max(params["long_period"], params["ema_long_period"])
+        required_limit = max(params["long_period"], params["ema_long_period"], params["adx_period"] if params["use_adx_filter"] else 0)
         if params["limit"] < required_limit:
             params["limit"] = required_limit
 
@@ -54,7 +57,7 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
             if logger:
                 logger.info(f"Начало торгового периода: {start_date}, Конец торгового периода: {end_date}")
 
-            # Применяем стратегию
+            # Применяем стратегию с новыми параметрами
             strategy_data = moving_average_strategy(
                 data.copy(),
                 short_period=params["short_period"],
@@ -67,6 +70,9 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
                 ema_long_period=params["ema_long_period"],
                 use_trend_filter=params["use_trend_filter"],
                 use_rsi_filter=params["use_rsi_filter"],
+                adx_period=params["adx_period"],
+                use_adx_filter=params["use_adx_filter"],
+                adx_threshold=params["adx_threshold"],
                 debug=False,
                 logger=logger
             )
@@ -97,7 +103,7 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
         logger.info(f"Лучшие параметры для {symbol}: {best_params}, Sharpe Ratio: {study.best_value:.2f}")
 
     # Корректируем limit для лучших параметров
-    required_limit = max(best_params["long_period"], best_params["ema_long_period"])
+    required_limit = max(best_params["long_period"], best_params["ema_long_period"], best_params["adx_period"] if best_params["use_adx_filter"] else 0)
     if best_params["limit"] < required_limit:
         best_params["limit"] = required_limit
 
@@ -147,6 +153,9 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
         ema_long_period=best_params["ema_long_period"],
         use_trend_filter=best_params["use_trend_filter"],
         use_rsi_filter=best_params["use_rsi_filter"],
+        adx_period=best_params["adx_period"],
+        use_adx_filter=best_params["use_adx_filter"],
+        adx_threshold=best_params["adx_threshold"],
         debug=False,
         logger=logger
     )

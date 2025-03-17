@@ -1,0 +1,20 @@
+{
+    "short_period": 31,
+    "long_period": 74,
+    "limit": 500,
+    "rsi_period": 14,
+    "atr_period": 18,
+    "buy_rsi_threshold": 36.387201057202375,
+    "sell_rsi_threshold": 45.644029821308784,
+    "stop_loss_multiplier": 2.308444189848497,
+    "take_profit_multiplier": 3.2673493676312226,
+    "ema_short_period": 39,
+    "ema_long_period": 180,
+    "use_trend_filter": false,
+    "use_rsi_filter": true,
+    "adx_period": 11,
+    "adx_threshold": 34.79381913816925,
+    "use_adx_filter": true,
+    "symbol": "ADA/USDT",
+    "timeframe": "1h"
+}

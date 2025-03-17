@@ -1,0 +1,20 @@
+{
+    "short_period": 38,
+    "long_period": 46,
+    "limit": 200,
+    "rsi_period": 14,
+    "atr_period": 20,
+    "buy_rsi_threshold": 35.676274407862536,
+    "sell_rsi_threshold": 45.76851836967026,
+    "stop_loss_multiplier": 1.1397469590467815,
+    "take_profit_multiplier": 3.4659022833965634,
+    "ema_short_period": 67,
+    "ema_long_period": 152,
+    "use_trend_filter": false,
+    "use_rsi_filter": true,
+    "adx_period": 19,
+    "adx_threshold": 31.104598166848056,
+    "use_adx_filter": false,
+    "symbol": "BTC/USDT",
+    "timeframe": "1h"
+}

@@ -35,8 +35,8 @@ async def live_trading(filename, telegram_token, telegram_chat_id, mode="product
     symbol = model_params_with_meta["symbol"]
     timeframe = model_params_with_meta["timeframe"]
     strategy_params = {k: v for k, v in model_params_with_meta.items() if k not in ["symbol", "timeframe", "limit", "stop_loss_multiplier", "take_profit_multiplier"]}
-    stop_loss_multiplier = model_params_with_meta.get("stop_loss_multiplier", 1.5)
-    take_profit_multiplier = model_params_with_meta.get("take_profit_multiplier", 3.0)
+    stop_loss_multiplier = model_params_with_meta.get("stop_loss_multiplier", 2)
+    take_profit_multiplier = model_params_with_meta.get("take_profit_multiplier", 4)
 
     telegram_bot = TelegramBot(telegram_token, telegram_chat_id, timeout=20)
 
