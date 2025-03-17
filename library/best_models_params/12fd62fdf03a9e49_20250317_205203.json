@@ -1,0 +1,20 @@
+{
+    "short_period": 23,
+    "long_period": 90,
+    "limit": 200,
+    "rsi_period": 10,
+    "atr_period": 17,
+    "buy_rsi_threshold": 23.94227938942394,
+    "sell_rsi_threshold": 88.13805662720506,
+    "stop_loss_multiplier": 1.237274838634444,
+    "take_profit_multiplier": 3.303029102892886,
+    "ema_short_period": 28,
+    "ema_long_period": 104,
+    "use_trend_filter": false,
+    "use_rsi_filter": false,
+    "adx_period": 10,
+    "adx_threshold": 21.814013962787765,
+    "use_adx_filter": false,
+    "symbol": "BNB/USDT",
+    "timeframe": "1h"
+}
