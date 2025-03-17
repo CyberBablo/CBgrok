@@ -8,6 +8,7 @@ import json
 import hashlib
 from datetime import datetime
 
+
 def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commission, n_trials=100, logger=None):
     """
     Оптимизирует параметры стратегии с использованием Optuna и сохраняет лучшие параметры в JSON-файл.
@@ -21,12 +22,13 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
     :param logger: Объект для логирования.
     :return: Кортеж (backtest_data, orders, metrics, num_orders) для лучших параметров.
     """
+
     def objective(trial):
         # Определяем параметры для оптимизации
         params = {
             "short_period": trial.suggest_int("short_period", 5, 50),
             "long_period": trial.suggest_int("long_period", 20, 200),
-            "limit": trial.suggest_categorical("limit", [200, 500, 1000]),
+            "limit": trial.suggest_categorical("limit", [200, 500, 1000, 1500]),
             "rsi_period": trial.suggest_int("rsi_period", 10, 20),
             "atr_period": trial.suggest_int("atr_period", 10, 20),
             "buy_rsi_threshold": trial.suggest_float("buy_rsi_threshold", 10, 60),
@@ -38,7 +40,6 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
             "use_trend_filter": trial.suggest_categorical("use_trend_filter", [True, False]),
             "use_rsi_filter": trial.suggest_categorical("use_rsi_filter", [True, False])
         }
-
         # Корректируем limit, если он меньше максимального периода
         required_limit = max(params["long_period"], params["ema_long_period"])
         if params["limit"] < required_limit:
@@ -47,6 +48,12 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
         try:
             # Загружаем данные
             data = data_fetcher.fetch_ohlcv(symbol, timeframe, params["limit"])
+            # Логируем начальную и конечную даты
+            start_date = data.index.min().strftime("%Y-%m-%d %H:%M:%S")
+            end_date = data.index.max().strftime("%Y-%m-%d %H:%M:%S")
+            if logger:
+                logger.info(f"Начало торгового периода: {start_date}, Конец торгового периода: {end_date}")
+
             # Применяем стратегию
             strategy_data = moving_average_strategy(
                 data.copy(),
@@ -122,6 +129,12 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
 
     # Выполняем финальный бэктест с лучшими параметрами
     data = data_fetcher.fetch_ohlcv(symbol, timeframe, best_params["limit"])
+    # Логируем начальную и конечную даты для финального бэктеста
+    start_date = data.index.min().strftime("%Y-%m-%d %H:%M:%S")
+    end_date = data.index.max().strftime("%Y-%m-%d %H:%M:%S")
+    if logger:
+        logger.info(f"Начало торгового периода: {start_date}, Конец торгового периода: {end_date}")
+
     strategy_data = moving_average_strategy(
         data.copy(),
         short_period=best_params["short_period"],

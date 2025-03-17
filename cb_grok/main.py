@@ -7,11 +7,11 @@ from datetime import datetime
 
 def main():
     """Запускает оптимизацию и бэктест для списка символов."""
-    symbols = ['BTC/USDT', 'ETH/USDT', 'XRP/USDT', 'BNB/USDT', 'ADA/USDT', 'SOL/USDT', 'DOGE/USDT']
+    symbols = ['BTC/USDT', 'ETH/USDT', 'XRP/USDT', 'BNB/USDT', 'ADA/USDT', 'SOL/USDT', 'DOGE/USDT', 'TRX/USDT']
     timeframe = '1h'
     initial_capital = 10000
     commission = 0.00075  # 0.075%
-    n_trials = 50
+    n_trials = 100
 
     # Настройка логирования
     log_folder = "log"
