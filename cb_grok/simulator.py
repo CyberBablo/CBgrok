@@ -25,14 +25,14 @@ class Simulator:
         self.timeframe = timeframe
         self.limit = limit
         self.port = port
-        self.adapter = ExchangeAdapter()
+        self.adapter = ExchangeAdapter(exchange_name="bybit")
 
     async def handler(self, connection):
         """Обработчик подключений для WebSocket-сервера."""
         websocket = connection
 
         # Загружаем данные за последние 1500 часов
-        data = self.adapter.fetch_ohlcv(self.symbol, self.timeframe, limit=self.limit)
+        data = self.adapter.fetch_ohlcv(self.symbol, self.timeframe, limit=self.limit, total_limit=self.limit)
 
         logger.info(f"Отправка {len(data)} свечей для {self.symbol} ({self.timeframe})")
 
