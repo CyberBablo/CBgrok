@@ -22,13 +22,17 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
     :return: Кортеж (backtest_data, orders, metrics, num_orders) для лучших параметров на валидационном наборе.
     """
     # Определение даты разделения: 1 марта 2025 года
-    split_date = pd.to_datetime("2025-02-23 00:00:00")
-
+    split_date = pd.to_datetime("2025-03-01 00:00:00")
     # Загрузка данных для обучения и валидации
-    full_data = data_fetcher.fetch_ohlcv(symbol, timeframe, limit=10000)  # Увеличен лимит до 10,000 свечей
+    full_data = data_fetcher.fetch_ohlcv(symbol, timeframe, limit=15000, total_limit=15000)  # Увеличен лимит до 10,000 свечей
     train_data = full_data[full_data.index < split_date]
     val_data = full_data[full_data.index >= split_date]
+    print(val_data.head())
+    print(val_data.tail())
 
+    print(len(full_data), len(train_data), len(val_data))
+
+    # exit(0)
     # Проверка минимального объема данных
     # if len(train_data) < 5000 or len(val_data) < 1000:
     #     if logger:
@@ -37,8 +41,12 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
     #     raise ValueError(f"Недостаточно данных: Обучающий набор = {len(train_data)} свечей, "
     #                      f"Валидационный набор = {len(val_data)} свечей.")
 
+
+
     if logger:
         logger.info(f"Обучающий набор: {len(train_data)} свечей, Валидационный набор: {len(val_data)} свечей")
+
+
 
     def objective(trial):
         # Определяем параметры для оптимизации с расширенными диапазонами

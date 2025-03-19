@@ -1,6 +1,7 @@
 import ccxt
 import pandas as pd
 import time
+import traceback
 
 class ExchangeAdapter:
     def __init__(self, exchange_name='binance', api_key=None, api_secret=None):
@@ -24,16 +25,23 @@ class ExchangeAdapter:
         all_data = []
         max_per_request = 1000 if self.exchange_name == 'bybit' else limit
         since = None
+        # print("limits", timeframe, limit, total_limit)
         while len(all_data) < total_limit:
             try:
                 ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=max_per_request)
                 if not ohlcv:
                     break
-                all_data.extend(ohlcv)
+                temp_test = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                temp_test['timestamp'] = pd.to_datetime(temp_test['timestamp'], unit='ms')
+                # print("TEMP TEST___________________")
+                # print(temp_test)
+                # print("_____________________________")
+                all_data = ohlcv + all_data
                 since = ohlcv[0][0] - (max_per_request * self._timeframe_to_milliseconds(timeframe))
                 time.sleep(self.exchange.rateLimit / 1000)
-            except Exception as e:
-                print(f"Ошибка при загрузке данных: {e}")
+
+            except:
+                print(f"Ошибка при загрузке данных: " + traceback.format_exc())
                 break
         all_data = all_data[-total_limit:]
         df = pd.DataFrame(all_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -44,6 +52,8 @@ class ExchangeAdapter:
     def _timeframe_to_milliseconds(self, timeframe):
         if timeframe == '1m':
             return 60 * 1000
+        if timeframe == '15m':
+            return 60 * 1000 * 15
         elif timeframe == '1h':
             return 3600 * 1000
         elif timeframe == '1d':
