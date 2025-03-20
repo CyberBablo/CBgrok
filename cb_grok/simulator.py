@@ -20,7 +20,7 @@ file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(mes
 logger.addHandler(file_handler)
 
 class Simulator:
-    def __init__(self, symbol, timeframe, limit=500, port=8765):
+    def __init__(self, symbol, timeframe, limit=1240, port=8765):
         self.symbol = symbol
         self.timeframe = timeframe
         self.limit = limit

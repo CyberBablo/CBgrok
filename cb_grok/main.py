@@ -87,7 +87,7 @@ if __name__ == "__main__":
     symbols = args.get('symbols', None)
     if symbols:
         symbols = symbols.split(',')
-    timeframe = args.get('timeframe', '15m')
+    timeframe = args.get('timeframe', '1h')
     initial_capital = float(args.get('initial_capital', 10000))
     commission = float(args.get('commission', 0.00075))
     n_trials = int(args.get('n_trials', 100))

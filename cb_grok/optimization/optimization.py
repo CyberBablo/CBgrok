@@ -1,5 +1,7 @@
 import optuna
 import pandas as pd
+from numpy.ma.core import trace
+
 from cb_grok.strategies.moving_average_strategy import moving_average_strategy
 from cb_grok.backtest.backtest import run_backtest
 from cb_grok.utils.utils import save_model_results
@@ -22,16 +24,19 @@ def optimize_backtest(data_fetcher, symbol, timeframe, initial_capital, commissi
     :return: Кортеж (backtest_data, orders, metrics, num_orders) для лучших параметров на валидационном наборе.
     """
     # Определение даты разделения: 1 марта 2025 года
-    split_date = pd.to_datetime("2025-03-01 00:00:00")
+    split_date = pd.to_datetime("2025-01-01 00:00:00")
+    val_end_date = pd.to_datetime("2025-02-01 00:00:00")
     # Загрузка данных для обучения и валидации
-    full_data = data_fetcher.fetch_ohlcv(symbol, timeframe, limit=15000, total_limit=15000)  # Увеличен лимит до 10,000 свечей
+    full_data = data_fetcher.fetch_ohlcv(symbol, timeframe, limit=4000, total_limit=4000)  # Увеличен лимит до 10,000 свечей
     train_data = full_data[full_data.index < split_date]
-    val_data = full_data[full_data.index >= split_date]
-    print(val_data.head())
-    print(val_data.tail())
+    val_data = full_data[split_date <= full_data.index]
+    val_data = val_data[val_data.index < val_end_date]
+    print(train_data.index[0])
+    print(train_data.index[-1])
+    print(val_data.index[0])
+    print(val_data.index[-1])
 
     print(len(full_data), len(train_data), len(val_data))
-
     # exit(0)
     # Проверка минимального объема данных
     # if len(train_data) < 5000 or len(val_data) < 1000:
