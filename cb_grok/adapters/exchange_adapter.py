@@ -56,6 +56,8 @@ class ExchangeAdapter:
             return 60 * 1000 * 15
         elif timeframe == '1h':
             return 3600 * 1000
+        elif timeframe == '4h':
+            return 3600 * 1000 * 4
         elif timeframe == '1d':
             return 86400 * 1000
         else:
